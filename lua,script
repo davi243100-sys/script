@@ -1,0 +1,276 @@
+--[[
+    RedzHub - Script Blox Fruits (Farm & PvP)
+    Desenvolvido para ser simples e funcional.
+]]
+
+-- CONFIGURAÇÕES GERAIS
+local Player = game.Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local Services = {
+    ReplicatedStorage = game:GetService("ReplicatedStorage"),
+    Players = game:GetService("Players"),
+    UserInputService = game:GetService("UserInputService"),
+    TweenService = game:GetService("TweenService")
+}
+
+local GameSettings = {
+    TargetNPCs = {},
+    PlayerTargets = {},
+    CurrentMode = "Farm", -- "Farm" ou "PvP"
+    AutoFarmEnabled = false,
+    PvPEnabled = false,
+    TeleportToNPCs = false,
+    AttackRange = 50,
+    TelekinesisRange = 100,
+    CameraLockEnabled = false,
+    GuidedAttackEnabled = false,
+    SelectedSkill = "Skill1", -- Exemplo
+    NPCNameFilter = "Sea Beast", -- Exemplo
+    PlayerNameFilter = "Admin", -- Exemplo
+    MaxLevelNPC = 3000,
+    MinLevelNPC = 1,
+    PlayerTeamsToAttack = {"Pirate", "Marine"},
+    UseTelekinesis = true
+}
+
+-- FUNÇÕES DE UTILITÁRIO
+local function GetClosestNPC()
+    local closestNPC = nil
+    local minDistance = math.huge
+
+    for _, npc in ipairs(game.Workspace.NPCs:GetChildren()) do -- Supondo que NPCs estejam em Workspace.NPCs
+        if npc:IsA("Model") and npc.Humanoid and npc.Humanoid.Health > 0 then
+            local npcRootPart = npc:FindFirstChild("HumanoidRootPart")
+            if npcRootPart then
+                local distance = (HumanoidRootPart.Position - npcRootPart.Position).Magnitude
+                if distance < minDistance and distance <= GameSettings.AttackRange then
+                    -- Filtros adicionais (nome, nível)
+                    if (GameSettings.NPCNameFilter == "" or npc.Name:match(GameSettings.NPCNameFilter)) and
+                       (npc.Level <= GameSettings.MaxLevelNPC and npc.Level >= GameSettings.MinLevelNPC) then
+                        minDistance = distance
+                        closestNPC = npc
+                    end
+                end
+            end
+        end
+    end
+    return closestNPC
+end
+
+local function GetClosestPlayer()
+    local closestPlayer = nil
+    local minDistance = math.huge
+
+    for _, player in ipairs(Services.Players:GetPlayers()) do
+        if player ~= Player and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            local playerRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            if playerRootPart then
+                local distance = (HumanoidRootPart.Position - playerRootPart.Position).Magnitude
+                if distance < minDistance and distance <= GameSettings.AttackRange then
+                    -- Filtros adicionais (nome, time)
+                    if (GameSettings.PlayerNameFilter == "" or player.Name:match(GameSettings.PlayerNameFilter)) and
+                       (not table.find(GameSettings.PlayerTeamsToAttack, player.Team.Name)) then
+                        minDistance = distance
+                        closestPlayer = player
+                    end
+                end
+            end
+        end
+    end
+    return closestPlayer
+end
+
+local function MoveTo(target)
+    -- Implementa movimento suave para o alvo
+    Services.TweenService:Create(HumanoidRootPart, TweenInfo.new(0.2), {CFrame = CFrame.lookAt(HumanoidRootPart.Position, target.Position)}):Play()
+    Humanoid:MoveTo(target.Position)
+end
+
+local function Attack(target)
+    -- Lógica para usar habilidades
+    if target then
+        local rootPart = target.Character.HumanoidRootPart
+        if rootPart then
+            MoveTo(rootPart) -- Move para perto do alvo
+            -- Exemplo: usar a primeira skill
+            local skills = Services.ReplicatedStorage.Skills -- Caminho comum para skills
+            if skills then
+                local skill1 = skills[GameSettings.SelectedSkill]
+                if skill1 then
+                    Services.ReplicatedStorage.DefaultChat.OnChat {
+                        Text = "/skills " .. GameSettings.SelectedSkill,
+                        Sender = Player.Name
+                    }
+                    -- Precisa de um delay ou lógica para garantir que a skill foi executada
+                    task.wait(0.5)
+                end
+            end
+        end
+    end
+end
+
+-- SISTEMA DE MENU (Exemplo com GUI simples)
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "RedzHubGui"
+Gui.ResetOnSpawn = false
+Gui.Parent = Player:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0.2, 0, 0.3, 0)
+MainFrame.Position = UDim2.new(0.05, 0, 0.05, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Draggable = true
+MainFrame.Parent = Gui
+
+-- Abas
+local TabFrame = Instance.new("Frame")
+TabFrame.Size = UDim2.new(1, 0, 0.1, 0)
+TabFrame.Position = UDim2.new(0, 0, 0, 0)
+TabFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+TabFrame.Parent = MainFrame
+
+local FarmTabButton = Instance.new("TextButton")
+FarmTabButton.Name = "FarmTab"
+FarmTabButton.Text = "Farm"
+FarmTabButton.Size = UDim2.new(0.5, 0, 1, 0)
+FarmTabButton.Position = UDim2.new(0, 0, 0, 0)
+FarmTabButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+FarmTabButton.Parent = TabFrame
+
+local PvPTabButton = Instance.new("TextButton")
+PvPTabButton.Name = "PvPTab"
+PvPTabButton.Text = "PvP"
+PvPTabButton.Size = UDim2.new(0.5, 0, 1, 0)
+PvPTabButton.Position = UDim2.new(0.5, 0, 0, 0)
+PvPTabButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+PvPTabButton.Parent = TabFrame
+
+-- Conteúdo das Abas
+local FarmContent = Instance.new("Frame")
+FarmContent.Size = UDim2.new(1, 0, 0.9, 0)
+FarmContent.Position = UDim2.new(0, 0, 0.1, 0)
+FarmContent.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+FarmContent.Parent = MainFrame
+FarmContent.Visible = true
+
+local PvPContent = Instance.new("Frame")
+PvPContent.Size = UDim2.new(1, 0, 0.9, 0)
+PvPContent.Position = UDim2.new(0, 0, 0.1, 0)
+PvPContent.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+PvPContent.Parent = MainFrame
+PvPContent.Visible = false
+
+-- Elementos dentro de cada aba (CheckBoxes, Inputs, etc.)
+-- Exemplo para FarmTab
+local AutoFarmToggle = Instance.new("CheckBox") -- Placeholder, precisa criar um CheckBox real
+AutoFarmToggle.Label = "Auto Farm"
+AutoFarmToggle.Position = UDim2.new(0.05, 0, 0.05, 0)
+AutoFarmToggle.Parent = FarmContent
+AutoFarmToggle.Changed:Connect(function(value)
+    GameSettings.AutoFarmEnabled = value
+end)
+
+local TeleportToggle = Instance.new("CheckBox")
+TeleportToggle.Label = "Teleportar para NPCs"
+TeleportToggle.Position = UDim2.new(0.05, 0, 0.15, 0)
+TeleportToggle.Parent = FarmContent
+TeleportToggle.Changed:Connect(function(value)
+    GameSettings.TeleportToNPCs = value
+end)
+
+-- Adicionar mais elementos para filtros, seleções de skills, etc.
+
+-- LÓGICA DE MODOS
+local function FarmLoop()
+    while GameSettings.AutoFarmEnabled do
+        local target = GetClosestNPC()
+        if target then
+            if GameSettings.TeleportToNPCs then
+                -- Implementar teleporte (usando TeleportService ou manipulação de CFrames)
+                -- Exemplo: Player.Character.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame
+            end
+            Attack(target)
+            task.wait(0.5) -- Pequeno delay entre ataques
+        else
+            task.wait(1) -- Espera se não houver alvos próximos
+        end
+        task.wait(0.1) -- Pequeno delay no loop para não travar
+    end
+end
+
+local function PvPLoop()
+    while GameSettings.PvPEnabled do
+        local target = GetClosestPlayer()
+        if target then
+            Attack(target)
+            task.wait(0.5)
+        else
+            task.wait(1)
+        end
+        task.wait(0.1)
+    end
+end
+
+-- LÓGICA DE ATAQUE TELEGUIDADO E CAMERA LOCK
+local function ApplyCameraLock(target)
+    if GameSettings.CameraLockEnabled and target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        local camera = game.Workspace.CurrentCamera
+        local targetRootPart = target.Character.HumanoidRootPart
+        local lookVector = (targetRootPart.Position - HumanoidRootPart.Position).Unit
+        camera.CFrame = CFrame.lookAt(camera.CFrame.Position, camera.CFrame.Position + lookVector)
+    end
+end
+
+local function ApplyGuidedAttack(target)
+    if GameSettings.GuidedAttackEnabled and target then
+        -- Lógica para ajustar a mira ou o uso de skills para acertar o alvo
+        -- Pode envolver predizer o movimento do alvo
+        Attack(target) -- Chama a função de ataque com o alvo
+    end
+end
+
+-- HOOKS E EVENTOS
+FarmTabButton.MouseButton1Click:Connect(function()
+    FarmContent.Visible = true
+    PvPContent.Visible = false
+    GameSettings.CurrentMode = "Farm"
+end)
+
+PvPTabButton.MouseButton1Click:Connect(function()
+    FarmContent.Visible = false
+    PvPContent.Visible = true
+    GameSettings.CurrentMode = "PvP"
+end)
+
+-- Iniciar loops de acordo com o modo
+-- Precisaria de um sistema para ligar/desligar os loops com os Toggles
+
+-- Exemplo básico de como iniciar um loop:
+-- task.spawn(function()
+--     while task.wait() do
+--         if GameSettings.AutoFarmEnabled and GameSettings.CurrentMode == "Farm" then
+--             FarmLoop()
+--         elseif GameSettings.PvPEnabled and GameSettings.CurrentMode == "PvP" then
+--             PvPLoop()
+--         end
+--     end
+-- end)
+
+-- Implementar lógica para ligar/desligar AutoFarmEnabled e PvPEnabled usando os toggles.
+
+-- Exemplo de como ligar o AutoFarm:
+-- AutoFarmToggle.Changed:Connect(function(value)
+--     GameSettings.AutoFarmEnabled = value
+--     if value then
+--         task.spawn(FarmLoop) -- Inicia o loop se estiver habilitado
+--     end
+-- end)
+
+-- Precisa de um sistema para lidar com skills do jogador e usar as corretas.
+-- Exemplo:
+-- Humanoid.Died:Connect(function()
+--     -- Lógica ao morrer
+-- end)
